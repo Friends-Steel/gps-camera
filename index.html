@@ -149,16 +149,15 @@
 
   function formatStamp(pos){
     var now = new Date();
-    var dateStr = pad(now.getDate()) + '-' + pad(now.getMonth()+1) + '-' + now.getFullYear();
-    var timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-    var lines = [dateStr + '   ' + timeStr];
+    var dateStr = pad(now.getDate()) + '/' + pad(now.getMonth()+1) + '/' + now.getFullYear();
+    var timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes());
+    var lines = ['Time: ' + dateStr + ' ' + timeStr];
     if (pos){
       var lat = pos.coords.latitude.toFixed(6);
       var lon = pos.coords.longitude.toFixed(6);
-      var acc = Math.round(pos.coords.accuracy);
-      lines.push('Lat ' + lat + '°   Lon ' + lon + '°   (±' + acc + 'm)');
+      lines.push('GPS: ' + lat + ', ' + lon);
     } else {
-      lines.push('GPS not available');
+      lines.push('GPS: Not available');
     }
     return lines;
   }
@@ -209,21 +208,23 @@
     var ctx = workCanvas.getContext('2d');
     ctx.drawImage(video, 0, 0, vw, vh);
 
-    // Stamp band
+    // Stamp text — small, bottom-left corner, no full-width band
     var lines = formatStamp(latestPosition);
-    var fontSize = Math.max(16, Math.round(vw / 42));
-    var lineH = Math.round(fontSize * 1.45);
-    var padX = Math.round(vw * 0.03);
-    var bandH = lineH * lines.length + Math.round(fontSize * 0.9);
+    var fontSize = Math.max(13, Math.round(vw / 60));
+    var lineH = Math.round(fontSize * 1.35);
+    var padX = Math.round(vw * 0.025);
+    var padB = Math.round(vw * 0.02);
 
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
-    ctx.fillRect(0, vh - bandH, vw, bandH);
-
-    ctx.font = fontSize + 'px ui-monospace, Menlo, Consolas, monospace';
-    ctx.textBaseline = 'middle';
+    ctx.font = fontSize + 'px ui-sans-serif, Arial, sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, Math.round(fontSize / 6));
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
     ctx.fillStyle = '#ffffff';
-    var y = vh - bandH + Math.round(bandH / (lines.length + 1));
+
+    var y = vh - padB - lineH * (lines.length - 1);
     for (var i = 0; i < lines.length; i++){
+      ctx.strokeText(lines[i], padX, y);
       ctx.fillText(lines[i], padX, y);
       y += lineH;
     }
