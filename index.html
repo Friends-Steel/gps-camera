@@ -48,6 +48,12 @@
   #video{object-fit:cover; width:100%; height:100%;}
   #resultCanvas{display:none; margin:auto;}
 
+  #flash{
+    position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none;
+    transition:opacity .08s ease-out;
+  }
+  #flash.on{opacity:.85; transition:none;}
+
   #camMsg{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     text-align:center; padding:24px; color:var(--muted); font-size:14px; line-height:1.5;
@@ -67,14 +73,6 @@
   }
   #shutter:active{transform:scale(.94);}
   #shutter:disabled{opacity:.35; pointer-events:none;}
-
-  .review-actions{display:none; gap:14px; width:100%; justify-content:center; padding: 14px max(16px, env(safe-area-inset-left,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px)); background:var(--panel); border-top:1px solid #1e2a42;}
-  .review-actions.show{display:flex;}
-  .btn{
-    flex:1; max-width:220px; padding:13px 16px; border-radius:12px; font-size:15px; font-weight:600;
-  }
-  .btn-primary{background:var(--accent); color:var(--accent-ink);}
-  .btn-secondary{background:var(--panel-2); color:var(--text); border:1px solid #2a3a5c;}
 
   .toast{
     position:fixed; left:50%; bottom: calc(100px + env(safe-area-inset-bottom,0px));
@@ -103,16 +101,12 @@
   <div id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="resultCanvas"></canvas>
+    <div id="flash"></div>
     <div id="camMsg" style="display:none;"></div>
   </div>
 
   <div class="controls" id="shootBar">
     <button id="shutter" disabled aria-label="Capture photo"></button>
-  </div>
-
-  <div class="review-actions" id="reviewBar">
-    <button class="btn btn-secondary" id="retakeBtn">Retake</button>
-    <button class="btn btn-primary" id="saveBtn">Save Photo</button>
   </div>
 
   <div class="gallery-bar" id="galleryBar" style="display:none;">
@@ -133,10 +127,7 @@
   var resultCanvas = document.getElementById('resultCanvas');
   var workCanvas = document.getElementById('workCanvas');
   var shutter = document.getElementById('shutter');
-  var shootBar = document.getElementById('shootBar');
-  var reviewBar = document.getElementById('reviewBar');
-  var retakeBtn = document.getElementById('retakeBtn');
-  var saveBtn = document.getElementById('saveBtn');
+  var flash = document.getElementById('flash');
   var camMsg = document.getElementById('camMsg');
   var gpsDot = document.getElementById('gpsDot');
   var gpsText = document.getElementById('gpsText');
@@ -147,8 +138,6 @@
 
   var latestPosition = null;
   var savedCount = 0;
-  var lastBlob = null;
-  var lastFilename = null;
 
   function showToast(msg){
     toast.textContent = msg;
@@ -239,59 +228,37 @@
       y += lineH;
     }
 
-    resultCanvas.width = vw;
-    resultCanvas.height = vh;
-    resultCanvas.getContext('2d').drawImage(workCanvas, 0, 0);
+    // Flash feedback, camera stays live throughout
+    flash.classList.add('on');
+    setTimeout(function(){ flash.classList.remove('on'); }, 120);
 
-    video.style.display = 'none';
-    resultCanvas.style.display = 'block';
-    shootBar.style.display = 'none';
-    reviewBar.classList.add('show');
+    var now = new Date();
+    var filename = 'IMG_' + now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
+      + '_' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) + '.jpg';
 
     workCanvas.toBlob(function(blob){
-      lastBlob = blob;
-      var now = new Date();
-      lastFilename = 'IMG_' + now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
-        + '_' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) + '.jpg';
+      if (!blob) return;
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+
+      savedCount++;
+      galleryBar.style.display = 'flex';
+      galleryCount.textContent = savedCount + ' saved';
+      var thumb = document.createElement('img');
+      thumb.src = workCanvas.toDataURL('image/jpeg', 0.5);
+      galleryThumbs.insertBefore(thumb, galleryThumbs.firstChild);
+
+      showToast('Saved: ' + filename);
     }, 'image/jpeg', 0.92);
   }
 
   shutter.addEventListener('click', capture);
-
-  retakeBtn.addEventListener('click', function(){
-    video.style.display = 'block';
-    resultCanvas.style.display = 'none';
-    shootBar.style.display = 'flex';
-    reviewBar.classList.remove('show');
-    lastBlob = null;
-  });
-
-  saveBtn.addEventListener('click', function(){
-    if (!lastBlob) return;
-    var url = URL.createObjectURL(lastBlob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = lastFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
-
-    savedCount++;
-    galleryBar.style.display = 'flex';
-    galleryCount.textContent = savedCount + ' saved';
-    var thumb = document.createElement('img');
-    thumb.src = url.indexOf('blob:') === 0 ? resultCanvas.toDataURL('image/jpeg', 0.5) : url;
-    galleryThumbs.insertBefore(thumb, galleryThumbs.firstChild);
-
-    showToast('Saved: ' + lastFilename);
-
-    video.style.display = 'block';
-    resultCanvas.style.display = 'none';
-    shootBar.style.display = 'flex';
-    reviewBar.classList.remove('show');
-    lastBlob = null;
-  });
 
   // Keep stream alive when returning to the tab
   document.addEventListener('visibilitychange', function(){
