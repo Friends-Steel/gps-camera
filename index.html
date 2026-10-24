@@ -228,23 +228,22 @@
     var ctx = workCanvas.getContext('2d');
     ctx.drawImage(video, 0, 0, vw, vh);
 
-    // Stamp text — small, bottom-left corner, no full-width band
+    // Stamp text on a full-width dark band at the bottom
     var lines = formatStamp(latestPosition);
-    var fontSize = Math.max(13, Math.round(vw / 60));
-    var lineH = Math.round(fontSize * 1.35);
+    var fontSize = Math.max(13, Math.round(vw / 55));
+    var lineH = Math.round(fontSize * 1.4);
     var padX = Math.round(vw * 0.025);
-    var padB = Math.round(vw * 0.02);
+    var bandH = lineH * lines.length + Math.round(fontSize * 0.8);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, vh - bandH, vw, bandH);
 
     ctx.font = fontSize + 'px ui-sans-serif, Arial, sans-serif';
-    ctx.textBaseline = 'bottom';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(2, Math.round(fontSize / 6));
-    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
 
-    var y = vh - padB - lineH * (lines.length - 1);
+    var y = vh - bandH + Math.round(bandH / (lines.length + 1));
     for (var i = 0; i < lines.length; i++){
-      ctx.strokeText(lines[i], padX, y);
       ctx.fillText(lines[i], padX, y);
       y += lineH;
     }
