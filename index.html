@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GPS Camera</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22GPS%20Camera%22%2C%22short_name%22%3A%22GPS%20Camera%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f172a%22%2C%22theme_color%22%3A%22%230f172a%22%2C%22icons%22%3A%5B%5D%7D">
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121c2e; --panel-2:#17233a; --text:#eef2ff;
+    --muted:#8d9bbd; --accent:#f5a524; --accent-ink:#1a1206;
+    --ok:#36c47a; --warn:#f5a524; --bad:#ef5a5a;
+    --stamp-bg: rgba(0,0,0,.62);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display:flex; flex-direction:column; min-height:100%;
+    padding-top: env(safe-area-inset-top,0px);
+    padding-bottom: env(safe-area-inset-bottom,0px);
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 12px max(16px, env(safe-area-inset-left,0px)) 10px max(16px, env(safe-area-inset-right,0px));
+    border-bottom: 1px solid #1e2a42;
+  }
+  header h1{font-size:16px; font-weight:700; margin:0; letter-spacing:.2px;}
+  .gps-pill{
+    display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted);
+    background:var(--panel-2); border:1px solid #233150; padding:5px 10px; border-radius:999px;
+  }
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--bad); flex:none;}
+  .dot.ok{background:var(--ok);}
+  .dot.warn{background:var(--warn);}
+
+  main{flex:1; display:flex; flex-direction:column; min-height:0;}
+
+  #stage{
+    position:relative; flex:1; min-height:0; background:#000;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  #video, #resultCanvas{
+    max-width:100%; max-height:100%; width:auto; height:auto; display:block;
+  }
+  #video{object-fit:cover; width:100%; height:100%;}
+  #resultCanvas{display:none; margin:auto;}
+
+  #camMsg{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:24px; color:var(--muted); font-size:14px; line-height:1.5;
+  }
+
+  .controls{
+    padding: 16px max(16px, env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px));
+    background:var(--panel);
+    border-top:1px solid #1e2a42;
+    display:flex; align-items:center; justify-content:center; gap:28px;
+  }
+  button{font-family:inherit; border:none; cursor:pointer;}
+  #shutter{
+    width:72px; height:72px; border-radius:50%;
+    background:var(--accent); border:4px solid #3a2d10;
+    box-shadow:0 0 0 3px var(--accent);
+  }
+  #shutter:active{transform:scale(.94);}
+  #shutter:disabled{opacity:.35; pointer-events:none;}
+
+  .review-actions{display:none; gap:14px; width:100%; justify-content:center; padding: 14px max(16px, env(safe-area-inset-left,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px)); background:var(--panel); border-top:1px solid #1e2a42;}
+  .review-actions.show{display:flex;}
+  .btn{
+    flex:1; max-width:220px; padding:13px 16px; border-radius:12px; font-size:15px; font-weight:600;
+  }
+  .btn-primary{background:var(--accent); color:var(--accent-ink);}
+  .btn-secondary{background:var(--panel-2); color:var(--text); border:1px solid #2a3a5c;}
+
+  .toast{
+    position:fixed; left:50%; bottom: calc(100px + env(safe-area-inset-bottom,0px));
+    transform:translateX(-50%); background:#0e1626; border:1px solid #2a3a5c;
+    color:var(--text); padding:10px 16px; border-radius:10px; font-size:13px;
+    opacity:0; pointer-events:none; transition:opacity .25s; z-index:20; max-width:90%; text-align:center;
+  }
+  .toast.show{opacity:1;}
+
+  .gallery-bar{
+    display:flex; align-items:center; gap:10px; padding:8px max(16px, env(safe-area-inset-left,0px));
+    background:var(--panel); border-top:1px solid #1e2a42; overflow-x:auto;
+  }
+  .gallery-bar img{width:44px; height:44px; object-fit:cover; border-radius:8px; border:1px solid #2a3a5c; flex:none;}
+  .gallery-count{font-size:12px; color:var(--muted); flex:none; white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GPS Camera</h1>
+  <div class="gps-pill"><span id="gpsDot" class="dot"></span><span id="gpsText">GPS dhoond rahe hain…</span></div>
+</header>
+
+<main>
+  <div id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="resultCanvas"></canvas>
+    <div id="camMsg" style="display:none;"></div>
+  </div>
+
+  <div class="controls" id="shootBar">
+    <button id="shutter" disabled aria-label="Capture photo"></button>
+  </div>
+
+  <div class="review-actions" id="reviewBar">
+    <button class="btn btn-secondary" id="retakeBtn">Retake</button>
+    <button class="btn btn-primary" id="saveBtn">Save Photo</button>
+  </div>
+
+  <div class="gallery-bar" id="galleryBar" style="display:none;">
+    <span class="gallery-count" id="galleryCount">0 saved</span>
+    <div id="galleryThumbs" style="display:flex; gap:8px;"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<canvas id="workCanvas" style="display:none;"></canvas>
+
+<script>
+(function(){
+  "use strict";
+
+  var video = document.getElementById('video');
+  var resultCanvas = document.getElementById('resultCanvas');
+  var workCanvas = document.getElementById('workCanvas');
+  var shutter = document.getElementById('shutter');
+  var shootBar = document.getElementById('shootBar');
+  var reviewBar = document.getElementById('reviewBar');
+  var retakeBtn = document.getElementById('retakeBtn');
+  var saveBtn = document.getElementById('saveBtn');
+  var camMsg = document.getElementById('camMsg');
+  var gpsDot = document.getElementById('gpsDot');
+  var gpsText = document.getElementById('gpsText');
+  var toast = document.getElementById('toast');
+  var galleryBar = document.getElementById('galleryBar');
+  var galleryThumbs = document.getElementById('galleryThumbs');
+  var galleryCount = document.getElementById('galleryCount');
+
+  var latestPosition = null;
+  var savedCount = 0;
+  var lastBlob = null;
+  var lastFilename = null;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 2200);
+  }
+
+  function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+  function formatStamp(pos){
+    var now = new Date();
+    var dateStr = pad(now.getDate()) + '-' + pad(now.getMonth()+1) + '-' + now.getFullYear();
+    var timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    var lines = [dateStr + '   ' + timeStr];
+    if (pos){
+      var lat = pos.coords.latitude.toFixed(6);
+      var lon = pos.coords.longitude.toFixed(6);
+      var acc = Math.round(pos.coords.accuracy);
+      lines.push('Lat ' + lat + '°   Lon ' + lon + '°   (±' + acc + 'm)');
+    } else {
+      lines.push('GPS not available');
+    }
+    return lines;
+  }
+
+  // ---- GPS ----
+  if ('geolocation' in navigator){
+    navigator.geolocation.watchPosition(function(pos){
+      latestPosition = pos;
+      var acc = pos.coords.accuracy;
+      gpsDot.className = 'dot ' + (acc <= 25 ? 'ok' : 'warn');
+      gpsText.textContent = 'GPS theek (±' + Math.round(acc) + 'm)';
+    }, function(err){
+      gpsDot.className = 'dot bad';
+      gpsText.textContent = err.code === 1 ? 'GPS permission denied' : 'GPS not available';
+    }, { enableHighAccuracy:true, maximumAge: 5000, timeout: 20000 });
+  } else {
+    gpsText.textContent = 'GPS not supported';
+  }
+
+  // ---- Camera ----
+  var stream = null;
+  function startCamera(){
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+      camMsg.style.display = 'flex';
+      camMsg.textContent = 'Camera support nahi hai is browser me.';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width:{ideal:1920}, height:{ideal:1080} },
+      audio: false
+    }).then(function(s){
+      stream = s;
+      video.srcObject = s;
+      shutter.disabled = false;
+    }).catch(function(err){
+      camMsg.style.display = 'flex';
+      camMsg.textContent = 'Camera access nahi mili. Browser settings me camera permission allow karein, phir page reload karein.\n\n(' + err.message + ')';
+    });
+  }
+  startCamera();
+
+  // ---- Capture ----
+  function capture(){
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+    workCanvas.width = vw;
+    workCanvas.height = vh;
+    var ctx = workCanvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, vw, vh);
+
+    // Stamp band
+    var lines = formatStamp(latestPosition);
+    var fontSize = Math.max(16, Math.round(vw / 42));
+    var lineH = Math.round(fontSize * 1.45);
+    var padX = Math.round(vw * 0.03);
+    var bandH = lineH * lines.length + Math.round(fontSize * 0.9);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.fillRect(0, vh - bandH, vw, bandH);
+
+    ctx.font = fontSize + 'px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    var y = vh - bandH + Math.round(bandH / (lines.length + 1));
+    for (var i = 0; i < lines.length; i++){
+      ctx.fillText(lines[i], padX, y);
+      y += lineH;
+    }
+
+    resultCanvas.width = vw;
+    resultCanvas.height = vh;
+    resultCanvas.getContext('2d').drawImage(workCanvas, 0, 0);
+
+    video.style.display = 'none';
+    resultCanvas.style.display = 'block';
+    shootBar.style.display = 'none';
+    reviewBar.classList.add('show');
+
+    workCanvas.toBlob(function(blob){
+      lastBlob = blob;
+      var now = new Date();
+      lastFilename = 'IMG_' + now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
+        + '_' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) + '.jpg';
+    }, 'image/jpeg', 0.92);
+  }
+
+  shutter.addEventListener('click', capture);
+
+  retakeBtn.addEventListener('click', function(){
+    video.style.display = 'block';
+    resultCanvas.style.display = 'none';
+    shootBar.style.display = 'flex';
+    reviewBar.classList.remove('show');
+    lastBlob = null;
+  });
+
+  saveBtn.addEventListener('click', function(){
+    if (!lastBlob) return;
+    var url = URL.createObjectURL(lastBlob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = lastFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+
+    savedCount++;
+    galleryBar.style.display = 'flex';
+    galleryCount.textContent = savedCount + ' saved';
+    var thumb = document.createElement('img');
+    thumb.src = url.indexOf('blob:') === 0 ? resultCanvas.toDataURL('image/jpeg', 0.5) : url;
+    galleryThumbs.insertBefore(thumb, galleryThumbs.firstChild);
+
+    showToast('Saved: ' + lastFilename);
+
+    video.style.display = 'block';
+    resultCanvas.style.display = 'none';
+    shootBar.style.display = 'flex';
+    reviewBar.classList.remove('show');
+    lastBlob = null;
+  });
+
+  // Keep stream alive when returning to the tab
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible' && !stream){
+      startCamera();
+    }
+  });
+
+  // ---- Offline support: cache this page itself via a Service Worker ----
+  if ('serviceWorker' in navigator){
+    var swCode =
+      "const CACHE='gps-camera-v1';" +
+      "self.addEventListener('install',e=>{" +
+      "  e.waitUntil(caches.open(CACHE).then(c=>c.add(self.registration.scope)));" +
+      "  self.skipWaiting();" +
+      "});" +
+      "self.addEventListener('activate',e=>self.clients.claim());" +
+      "self.addEventListener('fetch',e=>{" +
+      "  e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{" +
+      "    const copy=res.clone();" +
+      "    caches.open(CACHE).then(c=>c.put(e.request,copy));" +
+      "    return res;" +
+      "  }).catch(()=>r)));" +
+      "});";
+    var swBlob = new Blob([swCode], {type:'text/javascript'});
+    var swUrl = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl).catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
