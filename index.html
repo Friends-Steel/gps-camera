@@ -5,7 +5,7 @@
 <title>GPS Camera</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f172a">
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22GPS%20Camera%22%2C%22short_name%22%3A%22GPS%20Camera%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f172a%22%2C%22theme_color%22%3A%22%230f172a%22%2C%22icons%22%3A%5B%5D%7D">
+<link rel="manifest" href="manifest.json">
 <style>
   :root{
     --bg:#0b1220; --panel:#121c2e; --panel-2:#17233a; --text:#eef2ff;
@@ -302,23 +302,7 @@
 
   // ---- Offline support: cache this page itself via a Service Worker ----
   if ('serviceWorker' in navigator){
-    var swCode =
-      "const CACHE='gps-camera-v1';" +
-      "self.addEventListener('install',e=>{" +
-      "  e.waitUntil(caches.open(CACHE).then(c=>c.add(self.registration.scope)));" +
-      "  self.skipWaiting();" +
-      "});" +
-      "self.addEventListener('activate',e=>self.clients.claim());" +
-      "self.addEventListener('fetch',e=>{" +
-      "  e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{" +
-      "    const copy=res.clone();" +
-      "    caches.open(CACHE).then(c=>c.put(e.request,copy));" +
-      "    return res;" +
-      "  }).catch(()=>r)));" +
-      "});";
-    var swBlob = new Blob([swCode], {type:'text/javascript'});
-    var swUrl = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl).catch(function(){});
+    navigator.serviceWorker.register('sw.js').catch(function(){});
   }
 })();
 </script>
