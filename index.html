@@ -65,6 +65,19 @@
     border-top:1px solid #1e2a42;
     display:flex; align-items:center; justify-content:center; gap:28px;
   }
+  .controls.hidden{display:none;}
+
+  #backBtn{
+    display:none; width:100%; max-width:260px; padding:14px 16px; border-radius:12px;
+    font-size:15px; font-weight:600; background:var(--panel-2); color:var(--text); border:1px solid #2a3a5c;
+  }
+  #backBar{
+    padding: 16px max(16px, env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px));
+    background:var(--panel); border-top:1px solid #1e2a42;
+    display:none; align-items:center; justify-content:center;
+  }
+  #backBar.show{display:flex;}
+  #backBar.show #backBtn{display:block;}
   button{font-family:inherit; border:none; cursor:pointer;}
   #shutter{
     width:72px; height:72px; border-radius:50%;
@@ -109,6 +122,10 @@
     <button id="shutter" disabled aria-label="Capture photo"></button>
   </div>
 
+  <div id="backBar">
+    <button id="backBtn">Back to Camera</button>
+  </div>
+
   <div class="gallery-bar" id="galleryBar" style="display:none;">
     <span class="gallery-count" id="galleryCount">0 saved</span>
     <div id="galleryThumbs" style="display:flex; gap:8px;"></div>
@@ -127,6 +144,9 @@
   var resultCanvas = document.getElementById('resultCanvas');
   var workCanvas = document.getElementById('workCanvas');
   var shutter = document.getElementById('shutter');
+  var shootBar = document.getElementById('shootBar');
+  var backBar = document.getElementById('backBar');
+  var backBtn = document.getElementById('backBtn');
   var flash = document.getElementById('flash');
   var camMsg = document.getElementById('camMsg');
   var gpsDot = document.getElementById('gpsDot');
@@ -229,9 +249,18 @@
       y += lineH;
     }
 
-    // Flash feedback, camera stays live throughout
+    // Flash feedback
     flash.classList.add('on');
     setTimeout(function(){ flash.classList.remove('on'); }, 120);
+
+    // Show the captured photo on screen; switch to Back button
+    resultCanvas.width = vw;
+    resultCanvas.height = vh;
+    resultCanvas.getContext('2d').drawImage(workCanvas, 0, 0);
+    video.style.display = 'none';
+    resultCanvas.style.display = 'block';
+    shootBar.classList.add('hidden');
+    backBar.classList.add('show');
 
     var now = new Date();
     var filename = 'IMG_' + now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
@@ -260,6 +289,13 @@
   }
 
   shutter.addEventListener('click', capture);
+
+  backBtn.addEventListener('click', function(){
+    resultCanvas.style.display = 'none';
+    video.style.display = 'block';
+    backBar.classList.remove('show');
+    shootBar.classList.remove('hidden');
+  });
 
   // Keep stream alive when returning to the tab
   document.addEventListener('visibilitychange', function(){
